@@ -1,2 +1,3 @@
-# crypto-scanner
-Bot for discovering cycles in graph and scan for arbitrage
+# Crypto Scanner
+
+Scans for internal arbitrage opportunities on a cex.
