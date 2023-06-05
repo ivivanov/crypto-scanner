@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -17,47 +17,13 @@ import (
 	"github.com/joho/godotenv"
 )
 
-type Book struct {
-	Data struct {
-		Bids [][]string `json:"bids"`
-		Asks [][]string `json:"asks"`
-	} `json:"data"`
-}
-
-type BaseResponse struct {
-	Channel string `json:"channel"`
-	Event   string `json:"event"`
-}
-
-type HttpBook struct {
-	Bids [][]string `json:"bids"`
-	Asks [][]string `json:"asks"`
-}
-
-type Top1Book struct {
-	Pair      string
-	BidPrice  float64
-	BidAmount float64
-	AskPrice  float64
-	AskAmount float64
-}
-
-type OrderType string
-
-type Config struct {
-	Pairs []string             `json:"pairs"`
-	Types map[string]OrderType `json:"types"`
-}
-
-type Fees struct {
-	TakerFees map[string]float64 `json:"takerFees"`
-}
-
 const (
-	WS_ENDPOINT           = "ws.bitstamp.net"
-	MIN_PNL               = 0
-	BUY         OrderType = "buy"
-	SELL                  = "sell"
+	WS_ENDPOINT = "ws.bitstamp.net"
+	MIN_PNL     = 0
+
+	// enums
+	BUY  OrderType = "buy"
+	SELL OrderType = "sell"
 )
 
 var (
@@ -67,6 +33,7 @@ var (
 	pairTop1Book = make(map[string]Top1Book)
 	updateBookC  = make(chan Top1Book)
 
+	// fmt print in red
 	red = color.New(color.FgRed)
 )
 
@@ -130,22 +97,19 @@ func main() {
 	}()
 
 	// subscribe
-	for _, pair := range config.Pairs {
-		msg := []byte(fmt.Sprintf(`{"event":"bts:subscribe","data":{"channel":"order_book_%v"}}`, pair))
-		wsConn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-		err = wsConn.WriteMessage(websocket.TextMessage, msg)
+	go func() {
+		err = Subscribe(wsConn)
 		if err != nil {
 			fmt.Printf("write error: %v", err)
 			return
 		}
-	}
+	}()
 
 	// block the main thread
 	i := 0
 	for {
 		update := <-updateBookC
 		pairTop1Book[update.Pair] = update
-
 		pnl := CalcTriangularArb()
 
 		if i < 5 { // sanity check that initial https request have initialized the order books
@@ -155,6 +119,19 @@ func main() {
 			log.Println(red.Sprintf("%v", pnl)) // log adds datetime
 		}
 	}
+}
+
+func Subscribe(wsConn *websocket.Conn) error {
+	for _, pair := range config.Pairs {
+		msg := []byte(fmt.Sprintf(`{"event":"bts:subscribe","data":{"channel":"order_book_%v"}}`, pair))
+		wsConn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+		err := wsConn.WriteMessage(websocket.TextMessage, msg)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func CalcTriangularArb() float64 {
@@ -241,7 +218,7 @@ func LoadFees() error {
 
 func HandleMsgHttp(resp *http.Response, pair string) {
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		fmt.Println(err)
 		return
