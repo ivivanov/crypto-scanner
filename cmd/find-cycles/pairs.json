@@ -4,7 +4,6 @@
   ["btc", "gbp"],
   ["btc", "pax"],
   ["gbp", "usd"],
-  ["gbp", "eur"],
   ["eur", "usd"],
   ["xrp", "usd"],
   ["xrp", "eur"],

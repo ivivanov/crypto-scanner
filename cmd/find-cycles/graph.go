@@ -44,11 +44,11 @@ func (g *Graph) AddEdge(key1, key2 string) error {
 	vertex1 := g.getVertex(key1)
 	vertex2 := g.getVertex(key2)
 	if vertex1 == nil || vertex2 == nil {
-		return fmt.Errorf("invalid edge (%v)<--->(%v)", key1, key2)
+		return fmt.Errorf("invalid edge (%v)<--(%v)", key1, key2)
 	}
 
 	if contains(vertex1.adjacent, vertex2.key) || contains(vertex2.adjacent, vertex1.key) {
-		return fmt.Errorf("edge already exists (%v)<--->(%v)", key1, key2)
+		return fmt.Errorf("edge already exists (%v)<--(%v)", key1, key2)
 	}
 
 	vertex1.adjacent = append(vertex1.adjacent, vertex2)
@@ -100,7 +100,7 @@ func findCycles(graph *Graph, cycleLength int) map[string]string {
 		for _, neighbor := range vertex.adjacent {
 			if visited[neighbor.key] && neighbor.key != path[len(path)-2] {
 				if len(path)-indexOf(path, neighbor.key) == cycleLength {
-					cycle := strings.Join(path[indexOf(path, neighbor.key):], "-->")
+					cycle := strings.Join(path[indexOf(path, neighbor.key):], "-")
 					// cycle := append([]string{}, path[indexOf(path, neighbor.key):]...)
 					cycles[cycle] = neighbor.key
 				}

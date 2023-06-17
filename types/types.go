@@ -38,6 +38,7 @@ type Config struct {
 	Types map[string]OrderType `json:"types"`
 }
 
-type Fees struct {
-	TakerFees map[string]float64 `json:"takerFees"`
+type CurrencyPair struct {
+	From string
+	To   string
 }

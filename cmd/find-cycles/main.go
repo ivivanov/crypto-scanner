@@ -12,11 +12,6 @@ import (
 	crypto "github.com/ivivanov/crypto-scanner/types"
 )
 
-type CurrencyPair struct {
-	From string
-	To   string
-}
-
 const (
 	PAIRS_JSON  = "pairs.json"
 	TICKERS_TXT = "tickers.txt" // comma delimited list of tickers
@@ -28,13 +23,13 @@ type App struct {
 	Pairs   [][]string
 }
 
-func NewApp() (*App, error) {
-	pairs, err := LoadPairs()
+func newApp() (*App, error) {
+	pairs, err := loadPairs()
 	if err != nil {
 		return nil, err
 	}
 
-	tickers, err := LoadTickers()
+	tickers, err := loadTickers()
 	if err != nil {
 		return nil, err
 	}
@@ -56,8 +51,8 @@ func (app *App) TickerExists(ticker string) bool {
 }
 
 func (app *App) RestoreTickers(cycle string) (string, []string, error) {
-	currencies := strings.Split(cycle, "-->")
-	// convert to: eth-->usd-->btc-->eth
+	currencies := strings.Split(cycle, "-")
+	// convert to: eth-usd-btc-eth
 	currencies = append(currencies, currencies[0])
 
 	var res []string
@@ -77,7 +72,7 @@ func (app *App) RestoreTickers(cycle string) (string, []string, error) {
 }
 
 func main() {
-	app, err := NewApp()
+	app, err := newApp()
 	if err != nil {
 		fmt.Printf("Creating app: %v", err)
 		return
@@ -89,26 +84,49 @@ func main() {
 		return
 	}
 
-	cycles := Loading(graph, CYCLE_LEN, findCycles)
-	fmt.Printf("Cycles of length %d:\n", CYCLE_LEN)
+	cycles := loading(graph, CYCLE_LEN, findCycles)
 	res := make(map[string]crypto.Config)
+	pairToCycles := make(map[string][]string)
 
 	// build config
-	for k, _ := range cycles {
-		_, path, err := app.RestoreTickers(k)
+	for c := range cycles {
+		_, path, err := app.RestoreTickers(c)
 		if err != nil {
 			fmt.Printf("Restore tickers: %v", err)
 			return
 		}
 
-		conf, err := NewConfig(k, path)
+		for _, p := range path {
+			_, ok := pairToCycles[p]
+			if !ok {
+				pairToCycles[p] = append(pairToCycles[p], c)
+			} else {
+				if !arrContains(pairToCycles[p], c) {
+					pairToCycles[p] = append(pairToCycles[p], c)
+				}
+			}
+		}
+
+		conf, err := newConfig(c, path)
 		if err != nil {
 			fmt.Printf("Creating config: %v", err)
 			return
 		}
 
-		key := strings.ReplaceAll(k, "-->", "-")
-		res[key] = *conf
+		res[c] = *conf
+	}
+
+	// convert to json
+	pairToCyclesJson, err := json.MarshalIndent(pairToCycles, "", "  ")
+	if err != nil {
+		fmt.Printf("Creating config: %v", err)
+		return
+	}
+	// write json to file
+	err = os.WriteFile("pair-cycles.json", pairToCyclesJson, 0644)
+	if err != nil {
+		fmt.Printf("Creating config: %v", err)
+		return
 	}
 
 	// convert to json
@@ -126,7 +144,7 @@ func main() {
 	}
 }
 
-func LoadPairs() ([][]string, error) {
+func loadPairs() ([][]string, error) {
 	pairsJson, err := os.ReadFile(PAIRS_JSON)
 	if err != nil {
 		return nil, err
@@ -141,7 +159,7 @@ func LoadPairs() ([][]string, error) {
 	return pairs, nil
 }
 
-func LoadTickers() ([]string, error) {
+func loadTickers() ([]string, error) {
 	tickersList, err := os.ReadFile(TICKERS_TXT)
 	if err != nil {
 		return nil, err
@@ -152,8 +170,8 @@ func LoadTickers() ([]string, error) {
 	return tickers, nil
 }
 
-func NewConfig(cycle string, path []string) (*crypto.Config, error) {
-	currencies := strings.Split(cycle, "-->")
+func newConfig(cycle string, path []string) (*crypto.Config, error) {
+	currencies := strings.Split(cycle, "-")
 	config := &crypto.Config{
 		Pairs: path,
 		Types: make(map[string]crypto.OrderType),
@@ -184,7 +202,7 @@ func NewConfig(cycle string, path []string) (*crypto.Config, error) {
 	return config, nil
 }
 
-func Loading(graph *Graph, cycleLength int, findCyclesF func(*Graph, int) map[string]string) map[string]string {
+func loading(graph *Graph, cycleLength int, findCyclesF func(*Graph, int) map[string]string) map[string]string {
 	s := spinner.New(spinner.CharSets[11], 100*time.Millisecond)
 	s.Suffix = " Loading ..."
 
@@ -193,4 +211,14 @@ func Loading(graph *Graph, cycleLength int, findCyclesF func(*Graph, int) map[st
 	s.Stop()
 
 	return cycles
+}
+
+func arrContains(arr []string, item string) bool {
+	for _, v := range arr {
+		if item == v {
+			return true
+		}
+	}
+
+	return false
 }

@@ -8,13 +8,13 @@ import (
 )
 
 func TestRestoreTickers(t *testing.T) {
-	app, err := NewApp()
+	app, err := newApp()
 	if err != nil {
 		fmt.Printf("Creating app: %v", err)
 		return
 	}
 
-	input := "eth-->usd-->btc"
+	input := "eth-usd-btc"
 	expStart := "eth"
 	expOut := []string{"ethusd", "btcusd", "ethbtc"}
 
@@ -39,7 +39,7 @@ func TestRestoreTickers(t *testing.T) {
 }
 
 func TestNewConfig(t *testing.T) {
-	cycle := "eth-->usd-->btc"
+	cycle := "eth-usd-btc"
 	path := []string{"ethusd", "btcusd", "ethbtc"}
 
 	// "example": {
@@ -59,7 +59,7 @@ func TestNewConfig(t *testing.T) {
 		},
 	}
 
-	actOut, err := NewConfig(cycle, path)
+	actOut, err := newConfig(cycle, path)
 	if err != nil {
 		t.Fatal("Unexpected error")
 	}
