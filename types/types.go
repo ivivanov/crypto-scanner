@@ -1,4 +1,10 @@
-package main
+package types
+
+const (
+	// enums
+	BUY  OrderType = "buy"
+	SELL OrderType = "sell"
+)
 
 type Book struct {
 	Data struct {

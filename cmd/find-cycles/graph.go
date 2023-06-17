@@ -14,25 +14,19 @@ type Vertex struct {
 	adjacent []*Vertex
 }
 
-func NewUndirectedGraph(vertices [][]string, graph *Graph) error {
+func NewUndirectedGraph(vertices [][]string) (*Graph, error) {
+	graph := &Graph{}
 	for _, v := range vertices {
-		err := graph.AddVertex(v[0])
-		if err != nil {
-			return err
-		}
+		_ = graph.AddVertex(v[0])
+		_ = graph.AddVertex(v[1])
 
-		err = graph.AddVertex(v[1])
+		err := graph.AddEdge(v[0], v[1])
 		if err != nil {
-			return err
-		}
-
-		err = graph.AddEdge(v[0], v[1])
-		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
-	return nil
+	return graph, nil
 }
 
 func (g *Graph) AddVertex(key string) error {

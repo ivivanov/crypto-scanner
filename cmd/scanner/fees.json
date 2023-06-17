@@ -1,6 +1,7 @@
 {
   "takerFees": {
     "usdtusd": 0.024,
+    "usdteur": 0.024,
     "eurusd": 0.024,
     "gbpusd": 0.024,
     "gbpeur": 0.024,

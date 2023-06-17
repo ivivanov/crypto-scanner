@@ -15,23 +15,21 @@ import (
 	"github.com/fatih/color"
 	"github.com/gorilla/websocket"
 	"github.com/joho/godotenv"
+
+	crypto "github.com/ivivanov/crypto-scanner/types"
 )
 
 const (
 	WS_ENDPOINT = "ws.bitstamp.net"
 	MIN_PNL     = 0
-
-	// enums
-	BUY  OrderType = "buy"
-	SELL OrderType = "sell"
 )
 
 var (
-	config Config
-	fees   Fees
+	config crypto.Config
+	fees   crypto.Fees
 
-	pairTop1Book = make(map[string]Top1Book)
-	updateBookC  = make(chan Top1Book)
+	pairTop1Book = make(map[string]crypto.Top1Book)
+	updateBookC  = make(chan crypto.Top1Book)
 
 	// fmt print in red
 	red = color.New(color.FgRed)
@@ -144,13 +142,13 @@ func CalcTriangularArb() float64 {
 	return pnl
 }
 
-func CalcTrade(amount, fee float64, pair Top1Book) float64 {
+func CalcTrade(amount, fee float64, pair crypto.Top1Book) float64 {
 	afterFee := amount - amount*fee
 
 	switch config.Types[pair.Pair] {
-	case BUY:
+	case crypto.BUY:
 		return afterFee / pair.AskPrice
-	case SELL:
+	case crypto.SELL:
 		return afterFee * pair.BidPrice
 	default:
 		return 0 // todo err
@@ -173,7 +171,7 @@ func LoadConfig() error {
 		return err
 	}
 
-	var configs map[string]Config
+	var configs map[string]crypto.Config
 	err = json.Unmarshal(pairsJson, &configs)
 	if err != nil {
 		return err
@@ -224,7 +222,7 @@ func HandleMsgHttp(resp *http.Response, pair string) {
 		return
 	}
 
-	book := &HttpBook{}
+	book := &crypto.HttpBook{}
 	err = json.Unmarshal(body, book)
 	if err != nil {
 		fmt.Println(err)
@@ -236,11 +234,17 @@ func HandleMsgHttp(resp *http.Response, pair string) {
 	askPrice, _ := strconv.ParseFloat(book.Asks[0][0], 64)
 	askAmount, _ := strconv.ParseFloat(book.Asks[0][1], 64)
 
-	updateBookC <- Top1Book{pair, bidPrice, bidAmount, askPrice, askAmount}
+	updateBookC <- crypto.Top1Book{
+		Pair:      pair,
+		BidPrice:  bidPrice,
+		BidAmount: bidAmount,
+		AskPrice:  askPrice,
+		AskAmount: askAmount,
+	}
 }
 
 func HandleMsgWS(raw []byte) {
-	baseMsg := BaseResponse{}
+	baseMsg := crypto.BaseResponse{}
 	err := json.Unmarshal(raw, &baseMsg)
 	if err != nil {
 		fmt.Println("unmarshal:", err)
@@ -251,7 +255,7 @@ func HandleMsgWS(raw []byte) {
 	case "bts:subscription_succeeded":
 		fmt.Println(string(raw))
 	case "data":
-		book := &Book{}
+		book := &crypto.Book{}
 		err = json.Unmarshal(raw, book)
 		if err != nil {
 			fmt.Println(err)
@@ -263,7 +267,13 @@ func HandleMsgWS(raw []byte) {
 		askPrice, _ := strconv.ParseFloat(book.Data.Asks[0][0], 64)
 		askAmount, _ := strconv.ParseFloat(book.Data.Asks[0][1], 64)
 
-		updateBookC <- Top1Book{strings.TrimPrefix(baseMsg.Channel, "order_book_"), bidPrice, bidAmount, askPrice, askAmount}
+		updateBookC <- crypto.Top1Book{
+			Pair:      strings.TrimPrefix(baseMsg.Channel, "order_book_"),
+			BidPrice:  bidPrice,
+			BidAmount: bidAmount,
+			AskPrice:  askPrice,
+			AskAmount: askAmount,
+		}
 	default:
 		fmt.Println(string(raw))
 	}
