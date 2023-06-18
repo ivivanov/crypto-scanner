@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/briandowns/spinner"
 	"github.com/fatih/color"
 	"github.com/gorilla/websocket"
 	"github.com/joho/godotenv"
@@ -47,14 +48,12 @@ type App struct {
 }
 
 func (app *App) Subscribe() error {
-	for _, c := range app.config {
-		for _, pair := range c.Pairs {
-			msg := []byte(fmt.Sprintf(`{"event":"bts:subscribe","data":{"channel":"order_book_%v"}}`, pair))
-			app.wsConn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-			err := app.wsConn.WriteMessage(websocket.TextMessage, msg)
-			if err != nil {
-				return err
-			}
+	for pair := range app.pairToCycles {
+		msg := []byte(fmt.Sprintf(`{"event":"bts:subscribe","data":{"channel":"order_book_%v"}}`, pair))
+		app.wsConn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+		err := app.wsConn.WriteMessage(websocket.TextMessage, msg)
+		if err != nil {
+			return err
 		}
 	}
 
@@ -74,8 +73,6 @@ func (app *App) HandleMsgHttp(resp *http.Response, pair string) {
 		fmt.Println(err)
 		return
 	}
-
-	fmt.Printf("%v book update: %v", pair, book)
 
 	bidPrice, _ := strconv.ParseFloat(book.Bids[0][0], 64)
 	bidAmount, _ := strconv.ParseFloat(book.Bids[0][1], 64)
@@ -161,6 +158,29 @@ func (app *App) CalcTrade(cycle string, amount, fee float64, pair crypto.Top1Boo
 	}
 }
 
+func (app *App) InitOrderBooks() {
+	for pair := range app.pairToCycles {
+		url := fmt.Sprintf("https://www.bitstamp.net/api/v2/order_book/%v", pair)
+		resp, err := http.Get(url)
+		if err != nil {
+			fmt.Printf("%v init order book: %v", pair, err)
+			continue
+		}
+
+		fmt.Printf("status: %v for: %v", resp.Status, url)
+		app.HandleMsgHttp(resp, pair)
+	}
+}
+
+func (app *App) LoadingInitOrderBooks() {
+	s := spinner.New(spinner.CharSets[11], 100*time.Millisecond)
+	s.Suffix = " Loading ..."
+
+	s.Start()
+	app.InitOrderBooks()
+	s.Stop()
+}
+
 func NewApp() (*App, error) {
 	err := godotenv.Load()
 	if err != nil {
@@ -228,9 +248,10 @@ func main() {
 	signal.Notify(app.interruptC, os.Interrupt)
 
 	// async: init order book
-	go func() {
-		app.InitOrderBooks()
-	}()
+	// app.LoadingInitOrderBooks()
+	// app.InitOrderBooks()
+	// go func() {
+	// }()
 
 	// thread: read ws msgs
 	go func() {
@@ -266,16 +287,10 @@ func main() {
 			app.pairTop1Book[update.Pair] = update
 			for _, v := range app.pairToCycles[update.Pair] {
 				pnl := app.CalcTriangularArb(v)
+
 				if pnl > MIN_PNL {
 					log.Println(red.Sprintf("%v %v", v, pnl))
 				}
-
-				// if i < 5 { // sanity check that initial https request have initialized the order books
-				// 	fmt.Println(pnl)
-				// 	i++
-				// } else if pnl > MIN_PNL {
-				// 	log.Println(red.Sprintf("%v", pnl)) // log adds datetime
-				// }
 			}
 
 		case <-app.interruptC:
@@ -342,16 +357,4 @@ func loadPairCycles() (map[string][]string, error) {
 	}
 
 	return config, nil
-}
-
-func (app *App) InitOrderBooks() {
-	for pair := range app.pairToCycles {
-		resp, err := http.Get(fmt.Sprintf("https://www.bitstamp.net/api/v2/order_book/%v", pair))
-		if err != nil {
-			fmt.Printf("%v init order book: %v", pair, err)
-			continue
-		}
-
-		app.HandleMsgHttp(resp, pair)
-	}
 }
